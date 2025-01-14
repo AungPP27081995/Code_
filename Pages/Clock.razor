@@ -1,0 +1,182 @@
+﻿@page "/clock"
+
+<h2 class="text-primary">Alien Clock</h2>
+<div class="mb-4">
+    <p class="fs-4">Current Alien Time: <span class="fw-bold">@CurrentAlienTime</span></p>
+</div>
+
+<h2 class="text-success">Set Alien Time</h2>
+<div class="mb-4">
+    <div class="form-group mb-2">
+        <label>Year: <input class="form-control" type="number" @bind="newAlienTime.Year" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Month: <input class="form-control" type="number" @bind="newAlienTime.Month" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Day: <input class="form-control" type="number" @bind="newAlienTime.Day" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Hour: <input class="form-control" type="number" @bind="newAlienTime.Hour" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Minute: <input class="form-control" type="number" @bind="newAlienTime.Minute" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Second: <input class="form-control" type="number" @bind="newAlienTime.Second" /></label>
+    </div>
+    <button class="btn btn-primary" @onclick="SetTime">Set Time</button>
+</div>
+
+<p class="text-info">@SetTimeMessage</p>
+
+<h2 class="text-danger">Set Alarm</h2>
+<div class="mb-4">
+    <div class="form-group mb-2">
+        <label>Hour: <input class="form-control" type="number" @bind="alarmTime.Hour" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Minute: <input class="form-control" type="number" @bind="alarmTime.Minute" /></label>
+    </div>
+    <div class="form-group mb-2">
+        <label>Second: <input class="form-control" type="number" @bind="alarmTime.Second" /></label>
+    </div>
+    <button class="btn btn-danger" @onclick="SetAlarm">Set Alarm</button>
+</div>
+
+<p class="text-warning">@AlarmMessage</p>
+
+@code {
+    private AlienDateTime currentAlienTime;
+    private AlienDateTime newAlienTime = new AlienDateTime(2804, 1, 1, 0, 0, 0);
+    private AlienDateTime alarmTime = new AlienDateTime(0, 0, 0, 0, 0, 0);
+    private string SetTimeMessage;
+    private string AlarmMessage;
+    private System.Threading.Timer alienClockTimer;
+
+    private static readonly DateTime EarthBaseTime = new DateTime(1970, 1, 1, 0, 0, 0);
+    private static readonly AlienDateTime AlienBaseTime = new AlienDateTime(2804, 18, 31, 2, 2, 88);
+    private const double AlienSecondInEarthSeconds = 0.5;
+
+    private static readonly int[] DaysInMonth = {
+        44, 42, 48, 40, 48, 44, 40, 44, 42,
+        40, 40, 42, 44, 48, 42, 40, 44, 38
+    };
+
+    private string CurrentAlienTime => $"{currentAlienTime.Year}-{currentAlienTime.Month:D2}-{currentAlienTime.Day:D2} " +
+                                       $"{currentAlienTime.Hour:D2}:{currentAlienTime.Minute:D2}:{currentAlienTime.Second:D2}";
+
+    protected override void OnInitialized()
+    {
+        StartAlienClock();
+    }
+
+    private void StartAlienClock()
+    {
+        currentAlienTime = ConvertToAlienTime(DateTime.UtcNow);
+        alienClockTimer = new System.Threading.Timer(UpdateAlienTime, null, 0, (int)(AlienSecondInEarthSeconds * 1000));
+    }
+
+    private void UpdateAlienTime(object state)
+    {
+        currentAlienTime = AddAlienSeconds(currentAlienTime, 1);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void SetTime()
+    {
+        if (IsValidAlienDateTime(newAlienTime))
+        {
+            currentAlienTime = newAlienTime;
+            SetTimeMessage = "Alien time updated successfully!";
+        }
+        else
+        {
+            SetTimeMessage = "Invalid Alien date/time.";
+        }
+    }
+
+    private void SetAlarm()
+    {
+        AlarmMessage = $"Alarm set for {alarmTime.Hour:D2}:{alarmTime.Minute:D2}:{alarmTime.Second:D2}.";
+    }
+
+    private AlienDateTime ConvertToAlienTime(DateTime earthTime)
+    {
+        TimeSpan elapsedEarthTime = earthTime - EarthBaseTime;
+        double elapsedAlienSeconds = elapsedEarthTime.TotalSeconds / AlienSecondInEarthSeconds;
+
+        return AlienBaseTime.AddSeconds((int)elapsedAlienSeconds);
+    }
+
+    private AlienDateTime AddAlienSeconds(AlienDateTime alienTime, int seconds)
+    {
+        alienTime.Second += seconds;
+
+        if (alienTime.Second >= 90) // Alien seconds per minute
+        {
+            alienTime.Minute += alienTime.Second / 90;
+            alienTime.Second %= 90;
+        }
+
+        if (alienTime.Minute >= 90) // Alien minutes per hour
+        {
+            alienTime.Hour += alienTime.Minute / 90;
+            alienTime.Minute %= 90;
+        }
+
+        if (alienTime.Hour >= 36) // Alien hours per day
+        {
+            alienTime.Day += alienTime.Hour / 36;
+            alienTime.Hour %= 36;
+        }
+
+        while (alienTime.Day > DaysInMonth[alienTime.Month - 1])
+        {
+            alienTime.Day -= DaysInMonth[alienTime.Month - 1];
+            alienTime.Month++;
+
+            if (alienTime.Month > 18)
+            {
+                alienTime.Month = 1;
+                alienTime.Year++;
+            }
+        }
+
+        return alienTime;
+    }
+
+    private bool IsValidAlienDateTime(AlienDateTime dateTime)
+    {
+        return dateTime.Month >= 1 && dateTime.Month <= 18 &&
+               dateTime.Day >= 1 && dateTime.Day <= DaysInMonth[dateTime.Month - 1] &&
+               dateTime.Hour >= 0 && dateTime.Hour < 36 &&
+               dateTime.Minute >= 0 && dateTime.Minute < 90 &&
+               dateTime.Second >= 0 && dateTime.Second < 90;
+    }
+
+    public class AlienDateTime
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public int Day { get; set; }
+        public int Hour { get; set; }
+        public int Minute { get; set; }
+        public int Second { get; set; }
+
+        public AlienDateTime(int year, int month, int day, int hour, int minute, int second)
+        {
+            Year = year;
+            Month = month;
+            Day = day;
+            Hour = hour;
+            Minute = minute;
+            Second = second;
+        }
+
+        public AlienDateTime AddSeconds(int seconds)
+        {
+            return new AlienDateTime(Year, Month, Day, Hour, Minute, Second + seconds);
+        }
+    }
+}
